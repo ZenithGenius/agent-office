@@ -2450,7 +2450,7 @@
       <div class="settings-body">
         <div class="settings-row">
           <label class="settings-label">BRIDGE URL</label>
-          <input class="settings-input" id="bridge-url" value="ws://localhost:3456" placeholder="ws://localhost:3456" />
+          <input class="settings-input" id="bridge-url" value="" placeholder="same origin" />
         </div>
         <div class="settings-row">
           <label class="settings-label" data-i18n="bridge.team">TEAM</label>
@@ -2563,7 +2563,9 @@
     let activeId = null;  // currently selected agent in center chat
     let tlLeadId = null;  // agent id for the TL/owner in right panel
     let ws = null;
-    let bridgeUrl = 'ws://localhost:3456';
+    // Same origin when served by the bridge, so any PORT works; 3456 when opened as a file
+    const DEFAULT_BRIDGE = location.protocol.startsWith('http') ? `ws://${location.host}` : 'ws://localhost:3456';
+    let bridgeUrl = DEFAULT_BRIDGE;
     let currentServerMode = 'idle';
     let currentServerTeam = null;
     let cachedTeamList = [];  // cached team list for TL dropdown
@@ -2940,7 +2942,7 @@
     // ══════════════════════════════════════════
     function connectWS() {
       if (ws) {try {ws.close();} catch { } }
-      bridgeUrl = document.getElementById('bridge-url').value.trim() || 'ws://localhost:3456';
+      bridgeUrl = document.getElementById('bridge-url').value.trim() || DEFAULT_BRIDGE;
       setConnStatus('status.connecting', '');
 
       ws = new WebSocket(bridgeUrl);
