@@ -1151,7 +1151,7 @@
       justify-content: center;
       align-items: flex-end;
       padding: 12px 10px 0;
-      height: 360px;
+      height: 140px;
       overflow: hidden;
       position: relative;
     }
@@ -1170,9 +1170,9 @@
     }
 
     #tl-img {
-      height: 360px;
+      height: 140px;
       width: auto;
-      max-width: 324px;
+      max-width: 126px;
       object-fit: contain;
       object-position: bottom center;
       image-rendering: pixelated;
@@ -3066,9 +3066,7 @@
 
     function buildAvatars() {
       const list = document.getElementById('av-list');
-      const displayAgents = isMobile()
-        ? agents  // Mobile: include lead/owner in the avatar top bar
-        : agents.filter(a => a.role !== 'owner' && a.role !== 'lead');
+      const displayAgents = agents;
 
       // Build snapshot of desired state
       const desiredIds = displayAgents.map(ag => ag.id);
@@ -3186,10 +3184,16 @@
       const ag = agents.find(a => a.id === id);
       if (!ag) return;
 
-      // On mobile, if selecting a lead/owner, also set them as tlLeadId
+      // If selecting a lead/owner, also set them as tlLeadId
       // so replies from the lead route correctly through receiveReply()
-      if (isMobile() && (ag.role === 'lead' || ag.role === 'owner')) {
-        tlLeadId = id;
+      if (ag.role === 'lead' || ag.role === 'owner') {
+        if (isMobile()) {
+          tlLeadId = id;
+        } else {
+          // Keep the right panel on the boss chosen in the center
+          document.getElementById('tl-lead-select').value = id;
+          onTLSelectChange(id);
+        }
       }
 
       const color = ROLE_COLORS[ag.role] || '#5de8a0';
@@ -3362,12 +3366,6 @@
         document.getElementById('tl-thinking').classList.remove('show');
         renderTL();
         tlSetSprite('idle');
-      }
-
-      // Auto-open doc viewer for complex replies from owner/lead (skip raw tool output)
-      const agent = agents.find(a => a.id === agentId);
-      if (agent && (agent.role === 'owner' || agent.role === 'lead') && isComplexReply(reply) && !isRawToolOutput(reply)) {
-        openDocViewer(agentId, reply);
       }
     }
 
