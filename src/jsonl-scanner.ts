@@ -26,6 +26,7 @@ const TAIL_INTERVAL_MS = 1000;
 const SCAN_INTERVAL_MS = 3000;
 const TEAMS_DIR = join(homedir(), ".claude", "teams");
 const PROJECTS_DIR = join(homedir(), ".claude", "projects");
+const SESSIONS_DIR = join(homedir(), ".claude", "sessions");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,8 +113,25 @@ export function listTeams(): {
 }
 
 /** Check if a team's lead session process is still running */
-function isLeadAlive(config: TeamConfig): boolean {
+export function isLeadAlive(
+  config: TeamConfig,
+  sessionsDir = SESSIONS_DIR,
+): boolean {
   if (!config.leadSessionId) return false;
+  // Claude Code keeps one sessions/<pid>.json per live session; the session id
+  // is not on the command line of a plain `claude` launch.
+  try {
+    for (const f of readdirSync(sessionsDir)) {
+      if (!f.endsWith(".json")) continue;
+      try {
+        const s = JSON.parse(readFileSync(join(sessionsDir, f), "utf8"));
+        if (s.sessionId !== config.leadSessionId) continue;
+        process.kill(s.pid, 0); // throws if the process is gone
+        return true;
+      } catch {}
+    }
+  } catch {}
+  // Older Claude Code: session id passed on the command line
   try {
     const result = Bun.spawnSync({
       cmd: ["pgrep", "-f", config.leadSessionId],
@@ -728,54 +746,45 @@ function findTmuxPaneByAncestry(
 /** Discover standalone Claude Code sessions (not part of a team) */
 export function discoverOwnerSessions(): OwnerSession[] {
   const sessions: OwnerSession[] = [];
+  if (!existsSync(SESSIONS_DIR)) return sessions;
+
+  const { ttyMap, pidMap } = buildTmuxMaps();
+
   try {
-    // Find claude processes that are NOT teammates (no --agent-id flag)
-    const result = Bun.spawnSync({
-      cmd: [
-        "bash",
-        "-c",
-        "ps -eo pid,tty,command | grep -E '[c]laude' | grep -v -- '--agent-id' | grep -v grep | grep -v chroma | grep -v plugins | grep -v hooks | grep -v uv | grep -v bun",
-      ],
-    });
-    const lines = result.stdout.toString().trim().split("\n").filter(Boolean);
-
-    // Build tmux mappings (tty-based + pid-ancestry-based)
-    const { ttyMap, pidMap } = buildTmuxMaps();
-
-    for (const line of lines) {
-      const match = line.trim().match(/^(\d+)\s+(\S+)\s+(.+)$/);
-      if (!match) continue;
-      const pid = Number.parseInt(match[1], 10);
-      const ttyShort = match[2];
-
-      // Get cwd via lsof
-      let cwd = "";
+    for (const f of readdirSync(SESSIONS_DIR)) {
+      if (!f.endsWith(".json")) continue;
       try {
-        const lsofResult = Bun.spawnSync({
-          cmd: ["lsof", "-p", String(pid), "-Fn"],
-        });
-        const lsofOut = lsofResult.stdout.toString();
-        const cwdMatch = lsofOut.match(/fcwd\nn(.*)/m);
-        if (cwdMatch) cwd = cwdMatch[1];
+        const { pid, sessionId, cwd, kind } = JSON.parse(
+          readFileSync(join(SESSIONS_DIR, f), "utf8"),
+        );
+        if (kind !== undefined && kind !== "interactive") continue;
+        try {
+          process.kill(pid, 0);
+        } catch {
+          continue;
+        }
+
+        const ttyRaw = Bun.spawnSync({
+          cmd: ["ps", "-o", "tty=", "-p", String(pid)],
+        })
+          .stdout.toString()
+          .trim();
+        const tty = !ttyRaw || ttyRaw === "?" ? "" : `/dev/${ttyRaw}`;
+
+        const projectName = cwd.split("/").pop() || cwd;
+        const tmuxPane = ttyMap.get(tty) || findTmuxPaneByAncestry(pid, pidMap);
+
+        const candidate = join(cwdToProjectDir(cwd), `${sessionId}.jsonl`);
+        const session: OwnerSession = {
+          pid,
+          cwd,
+          projectName,
+          tty,
+          tmuxPane,
+        };
+        if (existsSync(candidate)) session.jsonlPath = candidate;
+        sessions.push(session);
       } catch {}
-      if (!cwd) continue;
-
-      const ttyFull = ttyShort.startsWith("/dev/")
-        ? ttyShort
-        : `/dev/${ttyShort}`;
-      const projectName = cwd.split("/").pop() || cwd;
-
-      // Try tty match first, then fall back to pid ancestry
-      const tmuxPane =
-        ttyMap.get(ttyFull) || findTmuxPaneByAncestry(pid, pidMap);
-
-      sessions.push({
-        pid,
-        cwd,
-        projectName,
-        tty: ttyFull,
-        tmuxPane,
-      });
     }
   } catch {}
   return sessions;
