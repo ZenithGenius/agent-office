@@ -327,6 +327,72 @@
       display: flex;
     }
 
+    /* Needs-you highlight */
+    .av.needs-you .av-ring,
+    .av.needs-you.active .av-ring,
+    .av.needs-you.unread .av-ring {
+      border-color: #ff5252;
+      opacity: 1;
+      animation: needs-you-pulse 1.2s ease-in-out infinite;
+      box-shadow: 0 0 8px rgba(255, 82, 82, .55);
+    }
+
+    @keyframes needs-you-pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 rgba(255, 82, 82, .55);
+        opacity: 1;
+      }
+
+      50% {
+        box-shadow: 0 0 0 6px rgba(255, 82, 82, 0);
+        opacity: .85;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      .av.needs-you .av-ring,
+      .av.needs-you.active .av-ring,
+      .av.needs-you.unread .av-ring {
+        animation: none;
+        box-shadow: 0 0 0 2px rgba(255, 82, 82, .55);
+      }
+    }
+
+    .av-bang {
+      position: absolute;
+      top: -2px;
+      left: -4px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ff5252;
+      color: #fff;
+      font-family: var(--ff-mono);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--bg);
+      z-index: 2;
+    }
+
+    .av.needs-you .av-bang {
+      display: flex;
+    }
+
+    .av-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      display: block;
+    }
+
     /* Tooltip */
     .av-tip {
       position: absolute;
@@ -1062,6 +1128,89 @@
       border-bottom: 1px solid var(--border);
     }
 
+    /* Agent-to-agent message feed */
+    #am-feed {
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #am-hdr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-family: var(--ff-mono);
+      font-size: calc(8px + var(--font-delta));
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      user-select: none;
+    }
+
+    #am-hdr:hover {
+      color: var(--gold);
+    }
+
+    #am-unread {
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: #c0392b;
+      color: #fff;
+      font-size: calc(8px + var(--font-delta));
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #am-feed:not(.open) #am-unread.has {
+      display: flex;
+    }
+
+    #am-arrow {
+      margin-left: auto;
+      transition: transform .15s;
+    }
+
+    #am-feed.open #am-arrow {
+      transform: rotate(90deg);
+    }
+
+    #am-list {
+      display: none;
+      max-height: 140px;
+      overflow-y: auto;
+      padding: 0 0 6px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(212, 168, 50, .12) transparent;
+    }
+
+    #am-feed.open #am-list {
+      display: block;
+    }
+
+    .am-row {
+      padding: 3px 12px;
+      font-family: var(--ff-mono);
+      font-size: calc(9px + var(--font-delta));
+      color: var(--text-dim);
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .am-row:hover {
+      background: rgba(212, 168, 50, .08);
+      color: var(--text);
+    }
+
+    .am-from {
+      color: var(--gold);
+    }
+
     #tl-online-dot {
       width: 7px;
       height: 7px;
@@ -1151,7 +1300,7 @@
       justify-content: center;
       align-items: flex-end;
       padding: 12px 10px 0;
-      height: 360px;
+      height: 140px;
       overflow: hidden;
       position: relative;
     }
@@ -1170,9 +1319,9 @@
     }
 
     #tl-img {
-      height: 360px;
+      height: 140px;
       width: auto;
-      max-width: 324px;
+      max-width: 126px;
       object-fit: contain;
       object-position: bottom center;
       image-rendering: pixelated;
@@ -2415,6 +2564,15 @@
         </div>
       </div>
 
+      <div id="am-feed">
+        <div id="am-hdr" onclick="toggleAmFeed()">
+          <span>AGENT MESSAGES</span>
+          <span id="am-unread"></span>
+          <span id="am-arrow">&#x25B8;</span>
+        </div>
+        <div id="am-list"></div>
+      </div>
+
       <div id="tl-char-wrap">
         <img id="tl-img" src="" alt="">
       </div>
@@ -2450,7 +2608,7 @@
       <div class="settings-body">
         <div class="settings-row">
           <label class="settings-label">BRIDGE URL</label>
-          <input class="settings-input" id="bridge-url" value="ws://localhost:3456" placeholder="ws://localhost:3456" />
+          <input class="settings-input" id="bridge-url" value="" placeholder="same origin" />
         </div>
         <div class="settings-row">
           <label class="settings-label" data-i18n="bridge.team">TEAM</label>
@@ -2552,6 +2710,9 @@
       owner: 'OWNER', lead: 'MALE', pm: 'FEMALE', architect: 'ARCHITECT',
       dev: 'DEV', qa: 'QA', security: 'SECURITY', 'security-reviewer': 'SECURITY', explorer: 'EXPLORER',
     };
+    const AVATAR_SETS = ['male', 'female', 'dev', 'architect', 'qa', 'security', 'explorer', 'owner'];
+    // ponytail: fixed 8-color palette hashed from name; fine until someone wants custom colors
+    const AVATAR_PALETTE = ['#5de8a0', '#6ec6ff', '#f2c94c', '#ff8c6e', '#e879f9', '#d4a832', '#7dd3fc', '#c084fc'];
 
     // ══════════════════════════════════════════
     // STATE
@@ -2563,13 +2724,20 @@
     let activeId = null;  // currently selected agent in center chat
     let tlLeadId = null;  // agent id for the TL/owner in right panel
     let ws = null;
-    let bridgeUrl = 'ws://localhost:3456';
+    // Same origin when served by the bridge, so any PORT works; 3456 when opened as a file
+    const DEFAULT_BRIDGE = location.protocol.startsWith('http') ? `ws://${location.host}` : 'ws://localhost:3456';
+    let bridgeUrl = DEFAULT_BRIDGE;
     let currentServerMode = 'idle';
     let currentServerTeam = null;
     let cachedTeamList = [];  // cached team list for TL dropdown
     let currentLang = 'en';
     let currentStatusKey = 'status.disconnected';
     let currentStatusCls = '';
+    let avatarMap = {};       // agent name → {set} | {image}
+    let agentMsgs = [];       // agent-to-agent feed
+    let amUnread = 0;
+    let _avatarsPoll = null;
+    const AM_OPEN_KEY = 'agent-office-am-open';
 
     // ══════════════════════════════════════════
     // MESSAGE PERSISTENCE
@@ -2755,6 +2923,7 @@
         'status.connecting': 'connecting\u2026', 'status.error': 'ERROR',
         'status.idle': 'IDLE', 'status.working': 'WORKING', 'status.thinking': 'THINKING',
         'status.blocked': 'BLOCKED', 'status.reviewing': 'REVIEWING',
+        'status.needsYou': 'NEEDS YOU',
       },
       'zh-TW': {
         'settings.title': '\u8A2D\u5B9A', 'settings.language': '\u8A9E\u8A00', 'settings.font': '\u5B57\u9AD4',
@@ -2771,6 +2940,7 @@
         'status.idle': '\u9592\u7F6E', 'status.working': '\u5DE5\u4F5C\u4E2D',
         'status.thinking': '\u601D\u8003\u4E2D', 'status.blocked': '\u5DF2\u963B\u585E',
         'status.reviewing': '\u5BE9\u67E5\u4E2D',
+        'status.needsYou': '\u9700\u8981\u4F60',
       },
       'zh-CN': {
         'settings.title': '\u8BBE\u7F6E', 'settings.language': '\u8BED\u8A00', 'settings.font': '\u5B57\u4F53',
@@ -2787,6 +2957,7 @@
         'status.idle': '\u7A7A\u95F2', 'status.working': '\u5DE5\u4F5C\u4E2D',
         'status.thinking': '\u601D\u8003\u4E2D', 'status.blocked': '\u5DF2\u963B\u585E',
         'status.reviewing': '\u5BA1\u67E5\u4E2D',
+        'status.needsYou': '\u9700\u8981\u4F60',
       },
       ja: {
         'settings.title': '\u8A2D\u5B9A', 'settings.language': '\u8A00\u8A9E', 'settings.font': '\u30D5\u30A9\u30F3\u30C8',
@@ -2803,6 +2974,7 @@
         'status.idle': '\u5F85\u6A5F', 'status.working': '\u4F5C\u696D\u4E2D',
         'status.thinking': '\u601D\u8003\u4E2D', 'status.blocked': '\u30D6\u30ED\u30C3\u30AF',
         'status.reviewing': '\u30EC\u30D3\u30E5\u30FC\u4E2D',
+        'status.needsYou': '\u5BFE\u5FDC\u304C\u5FC5\u8981',
       },
       ko: {
         'settings.title': '\uC124\uC815', 'settings.language': '\uC5B8\uC5B4', 'settings.font': '\uAE00\uAF34',
@@ -2819,6 +2991,7 @@
         'status.idle': '\uB300\uAE30', 'status.working': '\uC791\uC5C5 \uC911',
         'status.thinking': '\uC0AC\uACE0 \uC911', 'status.blocked': '\uCC28\uB2E8',
         'status.reviewing': '\uAC80\uD1A0 \uC911',
+        'status.needsYou': '\uD655\uC778 \uD544\uC694',
       },
     };
 
@@ -2843,8 +3016,12 @@
           inp.placeholder = ag.hasTmux === false
             ? t('chat.noTmux')
             : t('chat.placeholder', {agent: ag.name || ag.id});
+          document.getElementById('char-role').textContent = needsYouLabel(ag);
         }
       }
+      _prevAvatarIds = [];
+      _prevAgentSnaps = {};
+      buildAvatars();
     }
 
     // ══════════════════════════════════════════
@@ -2940,7 +3117,7 @@
     // ══════════════════════════════════════════
     function connectWS() {
       if (ws) {try {ws.close();} catch { } }
-      bridgeUrl = document.getElementById('bridge-url').value.trim() || 'ws://localhost:3456';
+      bridgeUrl = document.getElementById('bridge-url').value.trim() || DEFAULT_BRIDGE;
       setConnStatus('status.connecting', '');
 
       ws = new WebSocket(bridgeUrl);
@@ -2955,6 +3132,9 @@
         if (dot) dot.classList.remove('reconnecting');
         loadChatHistory();
         fetchTeams();
+        fetchAvatars();
+        fetchAgentMessages();
+        if (!_avatarsPoll) _avatarsPoll = setInterval(fetchAvatars, 30000);
         setInterval(() => ws && ws.readyState === 1 && ws.send(JSON.stringify({type: 'ping'})), 20000);
       };
 
@@ -2964,6 +3144,7 @@
           if (event === 'state_update') applyState(data);
           else if (event === 'agent_reply') receiveReply(data.agentId, data.reply);
           else if (event === 'message_sent') addLog(data.agentId, `message sent: "${data.message.slice(0, 40)}"`);
+          else if (event === 'agent_message') onAgentMessage(data);
           else if (event === 'teams_updated') handleTeamsUpdated(data);
           else if (event === 'mode') handleModeChange(data);
         } catch { }
@@ -3053,6 +3234,7 @@
           const spriteState = ag.status === 'working' ? 'thinking' :
             ag.status === 'thinking' ? 'thinking' : 'idle';
           setSprite(activeId, spriteState);
+          document.getElementById('char-role').textContent = needsYouLabel(ag);
         }
       }
     }
@@ -3062,18 +3244,147 @@
     // ══════════════════════════════════════════
     const PLACEHOLDER_COUNT = 6;
 
+    function hashName(name) {
+      let h = 0;
+      const s = String(name || '');
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    }
+
+    function nameColor(name) {
+      return AVATAR_PALETTE[hashName(name) % AVATAR_PALETTE.length];
+    }
+
+    function agentInitials(name) {
+      // Skip short suffixes with digits, e.g. Claude Code's derived names "isnov-53", "3wheels-e6"
+      const parts = String(name || '').split(/[-_\s]+|(?<=[a-z])(?=[A-Z])/)
+        .filter(p => p && (p.length > 2 || !/\d/.test(p)));
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return String(name || '??').slice(0, 2).toUpperCase();
+    }
+
+    function bridgeHttp() {
+      return bridgeUrl.replace('ws://', 'http://').replace('wss://', 'https://');
+    }
+
+    // Custom images (avatars.json) are an identity ICON for the small circle only.
+    // The big character sprite always uses a built-in set: a logo/photo has no
+    // idle/thinking/talking poses, and standing a flat logo at persona size reads
+    // wrong next to the game-style characters.
+    function avatarFor(ag, forCharacter) {
+      const name = ag.name || ag.id || '';
+      const entry = avatarMap[name];
+      if (entry && entry.image && (!forCharacter || entry.character)) {
+        const img = entry.image;
+        return {image: img.startsWith('http') ? img : bridgeHttp() + img};
+      }
+      if (entry && entry.set) return {set: entry.set};
+      const role = ag.role || '';
+      if (role !== 'owner' && role !== 'lead') {
+        return {set: (ROLE_SPRITE[role] || 'DEV').toLowerCase()};
+      }
+      return {set: autoPickSet(name)};
+    }
+
+    // Collision-avoiding auto-pick: a plain per-name hash collides easily
+    // across only 8 built-in sets (e.g. two unrelated names both landing on
+    // 'architect'). Among agents with no avatars.json entry, assign each a
+    // distinct set — hash-ordered, then nudged to the next free slot — so
+    // two different agents don't end up looking identical.
+    function autoPickSet(name) {
+      const unassigned = [...new Set(
+        agents
+          .filter(a => a.role === 'owner' || a.role === 'lead')
+          .map(a => a.name || a.id)
+          .filter(n => {
+            const e = avatarMap[n];
+            // Only an entry that actually supplies a big-character look —
+            // a built-in set, or an image opted in with character:true —
+            // sits outside the auto-pick pool. An icon-only image (a logo)
+            // still needs an auto-picked character, same as no entry at all.
+            return !(e && (e.set || (e.image && e.character)));
+          })
+      )].sort((a, b) => hashName(a) - hashName(b) || (a < b ? -1 : 1));
+      const used = new Set();
+      let mine = -1;
+      for (const n of unassigned) {
+        let idx = hashName(n) % AVATAR_SETS.length;
+        while (used.has(idx)) idx = (idx + 1) % AVATAR_SETS.length;
+        used.add(idx);
+        if (n === name) mine = idx;
+      }
+      return AVATAR_SETS[mine >= 0 ? mine : hashName(name) % AVATAR_SETS.length];
+    }
+
+    function spriteUrl(av, state) {
+      if (av.image) return av.image;
+      const prefix = String(av.set || 'dev').toUpperCase();
+      return window[prefix + '_' + state.toUpperCase()] || window[prefix + '_IDLE'];
+    }
+
+    function needsYouLabel(ag) {
+      if (!ag.needsYou) return ROLE_LABELS[ag.role] || ag.role || 'AGENT';
+      const base = t('status.needsYou');
+      return ag.waitingFor ? base + ' \u2014 ' + ag.waitingFor : base;
+    }
+
+    function tipStatusText(ag, status) {
+      if (ag.needsYou) {
+        const base = t('status.needsYou');
+        return ag.waitingFor ? base + ' \u2014 ' + esc(ag.waitingFor) : base;
+      }
+      return (ROLE_LABELS[ag.role] || esc(ag.role) || 'AGENT') + ' \u2014 ' + t('status.' + status);
+    }
+
+    async function fetchAvatars() {
+      try {
+        const res = await fetch(bridgeHttp() + '/avatars');
+        if (!res.ok) return;
+        const next = await res.json();
+        if (JSON.stringify(avatarMap) === JSON.stringify(next)) return;
+        avatarMap = next || {};
+        // Re-render circles + visible portrait sprites
+        _prevAvatarIds = [];
+        _prevAgentSnaps = {};
+        buildAvatars();
+        if (activeId !== null) {
+          const ag = agents.find(a => a.id === activeId);
+          if (ag) {
+            const img = document.getElementById('char-img');
+            if (img) img.dataset.spriteKey = '';
+            const spriteState = ag.status === 'working' || ag.status === 'thinking' ? 'thinking' : 'idle';
+            setSprite(activeId, spriteState);
+          }
+        }
+        if (tlLeadId) {
+          const lead = agents.find(a => a.id === tlLeadId);
+          const img = document.getElementById('tl-img');
+          if (img) img.dataset.spriteKey = '';
+          if (lead) {
+            const spriteState = lead.status === 'working' || lead.status === 'thinking' ? 'thinking' : 'idle';
+            tlSetSprite(spriteState);
+          }
+        }
+      } catch { }
+    }
+
     function buildAvatars() {
       const list = document.getElementById('av-list');
-      const displayAgents = isMobile()
-        ? agents  // Mobile: include lead/owner in the avatar top bar
-        : agents.filter(a => a.role !== 'owner' && a.role !== 'lead');
+      const displayAgents = agents;
 
       // Build snapshot of desired state
       const desiredIds = displayAgents.map(ag => ag.id);
       const desiredSnaps = {};
       displayAgents.forEach(ag => {
         const status = ag.status || 'idle';
-        desiredSnaps[ag.id] = JSON.stringify({id: ag.id, name: ag.name || ag.id, role: ag.role, status, isActive: activeId === ag.id, ur: unread[ag.id] || 0});
+        const av = avatarFor(ag);
+        desiredSnaps[ag.id] = JSON.stringify({
+          id: ag.id, name: ag.name || ag.id, role: ag.role, status,
+          isActive: activeId === ag.id, ur: unread[ag.id] || 0,
+          needsYou: !!ag.needsYou, waitingFor: ag.waitingFor || '',
+          av: av.image || av.set || '',
+        });
       });
 
       // Check if anything actually changed
@@ -3104,11 +3415,13 @@
       }
 
       displayAgents.forEach(ag => {
-        const color = ROLE_COLORS[ag.role] || '#5de8a0';
         const name = ag.name || ag.id;
-        const initials = name.slice(0, 2).toUpperCase();
+        const color = nameColor(name);
+        const initials = agentInitials(name);
+        const av = avatarFor(ag);
         const isActive = activeId === ag.id;
         const hasUnread = (unread[ag.id] || 0) > 0;
+        const needs = !!ag.needsYou;
         const status = ag.status || 'idle';
         const sd = STATUS_DOT[status] || STATUS_DOT.idle;
         const snap = desiredSnaps[ag.id];
@@ -3122,11 +3435,14 @@
         _prevAgentSnaps[ag.id] = snap;
 
         const el = document.createElement('div');
-        el.className = 'av' + (isActive ? ' active' : '') + (hasUnread ? ' unread' : '');
+        el.className = 'av' + (isActive ? ' active' : '') + (hasUnread ? ' unread' : '') + (needs ? ' needs-you' : '');
         el.id = 'av-' + ag.id;
         el.style.cssText = '--col:' + color;
         const dotStyle = 'background:' + sd.bg + (sd.shadow ? ';box-shadow:' + sd.shadow : '') + (sd.pulse ? ';animation:pulse-dot 1.5s infinite' : '');
-        el.innerHTML = '<div class="av-ring"></div><div class="av-face"><div class="av-initials">' + esc(initials) + '</div></div><div class="av-role-dot" style="' + dotStyle + '"></div><div class="av-badge" id="badge-' + esc(ag.id) + '">' + (unread[ag.id] || 0) + '</div><div class="av-tip">' + esc(name) + '<span>' + (ROLE_LABELS[ag.role] || esc(ag.role) || 'AGENT') + ' \u2014 ' + t('status.' + status) + '</span></div>';
+        const face = av.image
+          ? '<img class="av-img" src="' + esc(av.image) + '" alt="">'
+          : '<div class="av-initials">' + esc(initials) + '</div>';
+        el.innerHTML = '<div class="av-ring"></div><div class="av-face">' + face + '</div><div class="av-bang">!</div><div class="av-role-dot" style="' + dotStyle + '"></div><div class="av-badge" id="badge-' + esc(ag.id) + '">' + (unread[ag.id] || 0) + '</div><div class="av-tip">' + esc(name) + '<span>' + tipStatusText(ag, status) + '</span></div>';
         el.addEventListener('click', () => selectAgent(ag.id));
         list.appendChild(el);
       });
@@ -3184,10 +3500,16 @@
       const ag = agents.find(a => a.id === id);
       if (!ag) return;
 
-      // On mobile, if selecting a lead/owner, also set them as tlLeadId
+      // If selecting a lead/owner, also set them as tlLeadId
       // so replies from the lead route correctly through receiveReply()
-      if (isMobile() && (ag.role === 'lead' || ag.role === 'owner')) {
-        tlLeadId = id;
+      if (ag.role === 'lead' || ag.role === 'owner') {
+        if (isMobile()) {
+          tlLeadId = id;
+        } else {
+          // Keep the right panel on the boss chosen in the center
+          document.getElementById('tl-lead-select').value = id;
+          onTLSelectChange(id);
+        }
       }
 
       const color = ROLE_COLORS[ag.role] || '#5de8a0';
@@ -3208,7 +3530,7 @@
       setSprite(id, 'idle');
       document.getElementById('char-name').textContent = name;
       document.getElementById('char-name').style.setProperty('--agent-col', color);
-      document.getElementById('char-role').textContent = ROLE_LABELS[ag.role] || ag.role || 'AGENT';
+      document.getElementById('char-role').textContent = needsYouLabel(ag);
 
       // Enable input
       const bar = document.getElementById('input-bar');
@@ -3260,10 +3582,10 @@
     function setSprite(id, state) {
       const ag = agents.find(a => a.id === id);
       if (!ag || activeId !== id) return;
-      const prefix = ROLE_SPRITE[ag.role] || 'DEV';
-      const key = `${prefix}_${state.toUpperCase()}`;
+      const av = avatarFor(ag, true);
+      const src = spriteUrl(av, state);
+      const key = av.image ? ('IMG:' + av.image) : (String(av.set || 'dev').toUpperCase() + '_' + state.toUpperCase());
       const img = document.getElementById('char-img');
-      const src = window[key];
       if (src && img.dataset.spriteKey !== key) {
         img.dataset.spriteKey = key;
         img.style.opacity = '.65';
@@ -3275,10 +3597,10 @@
       if (!tlLeadId) return;
       const ag = agents.find(a => a.id === tlLeadId);
       if (!ag) return;
-      const prefix = ROLE_SPRITE[ag.role] || 'MALE';
-      const key = `${prefix}_${state.toUpperCase()}`;
+      const av = avatarFor(ag, true);
+      const src = spriteUrl(av, state);
+      const key = av.image ? ('IMG:' + av.image) : (String(av.set || 'male').toUpperCase() + '_' + state.toUpperCase());
       const img = document.getElementById('tl-img');
-      const src = window[key];
       if (src && img.dataset.spriteKey !== key) {
         img.dataset.spriteKey = key;
         img.style.opacity = '.65';
@@ -3360,12 +3682,6 @@
         document.getElementById('tl-thinking').classList.remove('show');
         renderTL();
         tlSetSprite('idle');
-      }
-
-      // Auto-open doc viewer for complex replies from owner/lead (skip raw tool output)
-      const agent = agents.find(a => a.id === agentId);
-      if (agent && (agent.role === 'owner' || agent.role === 'lead') && isComplexReply(reply) && !isRawToolOutput(reply)) {
-        openDocViewer(agentId, reply);
       }
     }
 
@@ -3721,6 +4037,82 @@
     function closeDocViewer() {
       document.getElementById('doc-overlay').classList.remove('open');
       document.getElementById('doc-panel').classList.remove('open');
+    }
+
+    // ══════════════════════════════════════════
+    // AGENT-TO-AGENT FEED
+    // ══════════════════════════════════════════
+    function amTime(t) {
+      if (!t) return '';
+      if (/^\d{2}:\d{2}/.test(t)) return t.slice(0, 5);
+      try {
+        const d = new Date(t);
+        if (!isNaN(d.getTime())) {
+          return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }
+      } catch { }
+      return String(t).slice(0, 5);
+    }
+
+    function updateAmUnread() {
+      const el = document.getElementById('am-unread');
+      if (!el) return;
+      if (amUnread > 0) {
+        el.textContent = amUnread > 99 ? '99+' : String(amUnread);
+        el.classList.add('has');
+      } else {
+        el.textContent = '';
+        el.classList.remove('has');
+      }
+    }
+
+    function toggleAmFeed() {
+      const feed = document.getElementById('am-feed');
+      const open = feed.classList.toggle('open');
+      try {localStorage.setItem(AM_OPEN_KEY, open ? '1' : '0');} catch { }
+      if (open) {amUnread = 0; updateAmUnread();}
+    }
+
+    function renderAmFeed() {
+      const list = document.getElementById('am-list');
+      if (!list) return;
+      const frag = document.createDocumentFragment();
+      agentMsgs.forEach(m => {
+        const row = document.createElement('div');
+        row.className = 'am-row';
+        row.title = m.text || '';
+        row.innerHTML = esc(amTime(m.time)) + '  <span class="am-from">' + esc(m.from) + '</span> \u2192 ' + esc(m.to) + '  ' + esc(m.text || '');
+        row.addEventListener('click', () => {
+          const ag = agents.find(a => a.name === m.from);
+          if (ag) selectAgent(ag.id);
+        });
+        frag.appendChild(row);
+      });
+      list.innerHTML = '';
+      list.appendChild(frag);
+      list.scrollTop = list.scrollHeight;
+    }
+
+    function onAgentMessage(data) {
+      if (!data) return;
+      agentMsgs.push(data);
+      if (agentMsgs.length > 50) agentMsgs = agentMsgs.slice(-50);
+      const feed = document.getElementById('am-feed');
+      if (feed && !feed.classList.contains('open')) {
+        amUnread++;
+        updateAmUnread();
+      }
+      renderAmFeed();
+    }
+
+    async function fetchAgentMessages() {
+      try {
+        const res = await fetch(bridgeHttp() + '/messages');
+        if (!res.ok) return;
+        const arr = await res.json();
+        agentMsgs = Array.isArray(arr) ? arr.slice(-50) : [];
+        renderAmFeed();
+      } catch { }
     }
 
     // ══════════════════════════════════════════
@@ -4143,6 +4535,13 @@
     // Build initial empty avatars
     buildAvatars();
     updateTLPanel();
+
+    // Restore agent-message feed open/collapsed
+    try {
+      if (localStorage.getItem(AM_OPEN_KEY) === '1') {
+        document.getElementById('am-feed').classList.add('open');
+      }
+    } catch { }
 
     // Load and apply saved settings
     const _savedSettings = loadSettings();

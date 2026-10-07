@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  type AgentMessage,
   discoverOwnerSessions,
   getOwnerPane,
   getTeamConfig,
@@ -22,13 +23,38 @@ import {
   stopOwnerScanner,
   stopScanner,
 } from "./jsonl-scanner";
+import { isTrusted } from "./trust";
 
 const PORT = Number(process.env.PORT) || 3456;
+// Loopback only: POST /message types into Claude sessions via tmux, so the
+// bridge must not be reachable from the network. Override with HOST at your own risk.
+const HOST = process.env.HOST || "127.0.0.1";
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]", HOST]);
+const isTrustedRequest = (req: Request) => isTrusted(req, LOCAL_HOSTNAMES);
 const ROOT_DIR = join(import.meta.dir, "..");
 const DATA_DIR = join(ROOT_DIR, "data");
 const INBOX_DIR = join(DATA_DIR, "inbox");
 const STATE_FILE = join(DATA_DIR, "agents.json");
 const LOG_FILE = join(DATA_DIR, "bridge.log");
+const AVATARS_FILE = join(homedir(), ".agent-office", "avatars.json");
+const BUILTIN_AVATAR_SETS = new Set([
+  "male",
+  "female",
+  "dev",
+  "architect",
+  "qa",
+  "security",
+  "explorer",
+  "owner",
+]);
+const AVATAR_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+};
 
 // ─── Ensure dirs exist ──────────────────────────────────────────────────────
 for (const dir of [DATA_DIR, INBOX_DIR]) {
@@ -54,6 +80,8 @@ interface AgentState {
   tokens?: number;
   lastUpdated?: string;
   hasTmux?: boolean;
+  needsYou?: boolean;
+  waitingFor?: string;
 }
 
 interface InboxMessage {
@@ -79,6 +107,32 @@ type ServerMode =
   | { type: "owner" };
 
 let currentMode: ServerMode = { type: "idle" };
+
+// ponytail: last 50 in memory; disk persist if UI needs history across restarts
+const agentMessages: AgentMessage[] = [];
+const MAX_AGENT_MESSAGES = 50;
+
+function pushAgentMessage(msg: AgentMessage) {
+  const key = `${msg.from}|${msg.to}|${msg.text}|${msg.time}`;
+  if (
+    agentMessages.some((m) => `${m.from}|${m.to}|${m.text}|${m.time}` === key)
+  ) {
+    return;
+  }
+  agentMessages.push(msg);
+  if (agentMessages.length > MAX_AGENT_MESSAGES) agentMessages.shift();
+  broadcast("agent_message", msg);
+}
+
+function onAgentReply(agentId: string, reply: string) {
+  broadcast("agent_reply", { agentId, reply });
+  appendLog({
+    timestamp: new Date().toISOString(),
+    type: "agent_reply",
+    agentId,
+    data: { reply: reply.slice(0, 200) },
+  });
+}
 
 // Convenience getter for backwards compat
 function getActiveTeamName(): string | null {
@@ -115,37 +169,20 @@ function transitionTo(newMode: ServerMode) {
       (agentId, update) => {
         updateAgentState(agentId, update as Partial<AgentState>);
       },
-      (agentId, reply) => {
-        broadcast("agent_reply", { agentId, reply });
-        appendLog({
-          timestamp: new Date().toISOString(),
-          type: "agent_reply",
-          agentId,
-          data: { reply: reply.slice(0, 200) },
-        });
-      },
+      onAgentReply,
+      pushAgentMessage,
     );
   } else if (newMode.type === "owner") {
     writeState([]);
     broadcast("state_update", []);
-    const sessions = discoverOwnerSessions();
-    if (sessions.length > 0) {
-      startOwnerScanner(
-        sessions,
-        (agentId, update) => {
-          updateAgentState(agentId, update as Partial<AgentState>);
-        },
-        (agentId, reply) => {
-          broadcast("agent_reply", { agentId, reply });
-          appendLog({
-            timestamp: new Date().toISOString(),
-            type: "agent_reply",
-            agentId,
-            data: { reply: reply.slice(0, 200) },
-          });
-        },
-      );
-    }
+    startOwnerScanner(
+      discoverOwnerSessions(),
+      (agentId, update) => {
+        updateAgentState(agentId, update as Partial<AgentState>);
+      },
+      onAgentReply,
+      pushAgentMessage,
+    );
   } else {
     // idle
     writeState([]);
@@ -341,11 +378,8 @@ function clearInbox(agentId: string) {
 }
 
 // ─── CORS headers ────────────────────────────────────────────────────────────
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+// No CORS: the UI is served from the bridge itself (same origin).
+const CORS: Record<string, string> = {};
 
 // ─── Resolve team-lead tmux pane at runtime ──────────────────────────────────
 // The lead's tmuxPaneId is empty in config. We find it by:
@@ -481,6 +515,57 @@ function json(data: unknown, status = 200) {
     status,
     headers: { "Content-Type": "application/json", ...CORS },
   });
+}
+
+function expandHome(p: string): string {
+  if (p.startsWith("~/")) return join(homedir(), p.slice(2));
+  return p;
+}
+
+/** Read ~/.agent-office/avatars.json → API map + ordered absolute image paths. */
+// A plain string value is an icon for the small circle only (the default: a
+// logo doesn't belong on the big character). { image, character: true } opts
+// a real portrait (e.g. a person, not a logo) into the big character too.
+function loadAvatars(): {
+  api: Record<string, { set: string } | { image: string; character?: true }>;
+  paths: string[];
+} {
+  const api: Record<
+    string,
+    { set: string } | { image: string; character?: true }
+  > = {};
+  const paths: string[] = [];
+  try {
+    if (!existsSync(AVATARS_FILE)) return { api, paths };
+    const raw = JSON.parse(readFileSync(AVATARS_FILE, "utf8"));
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      return { api, paths };
+    }
+    for (const [name, rawValue] of Object.entries(raw)) {
+      const asCharacter =
+        typeof rawValue === "object" &&
+        rawValue !== null &&
+        (rawValue as { character?: unknown }).character === true;
+      const value =
+        typeof rawValue === "string"
+          ? rawValue
+          : typeof (rawValue as { image?: unknown })?.image === "string"
+            ? (rawValue as { image: string }).image
+            : undefined;
+      if (!value) continue;
+      if (BUILTIN_AVATAR_SETS.has(value)) {
+        api[name] = { set: value };
+      } else {
+        const idx = paths.length;
+        paths.push(expandHome(value));
+        api[name] = {
+          image: `/avatar/${idx}`,
+          ...(asCharacter ? { character: true } : {}),
+        };
+      }
+    }
+  } catch {}
+  return { api, paths };
 }
 
 // ─── HTTP Router ─────────────────────────────────────────────────────────────
@@ -743,6 +828,39 @@ async function handleRequest(req: Request): Promise<Response> {
     });
   }
 
+  // ── GET /messages ── agent-to-agent feed (oldest first)
+  if (method === "GET" && path === "/messages") {
+    return json(agentMessages);
+  }
+
+  // ── GET /avatars ── session-name → sprite set or /avatar/<n>
+  if (method === "GET" && path === "/avatars") {
+    return json(loadAvatars().api);
+  }
+
+  // ── GET /avatar/:index ── serve n-th path entry from avatars config only
+  if (method === "GET" && path.startsWith("/avatar/")) {
+    const idx = Number.parseInt(path.slice(8), 10);
+    if (!Number.isFinite(idx) || idx < 0) {
+      return new Response("Not found", { status: 404 });
+    }
+    const { paths } = loadAvatars();
+    const filePath = paths[idx];
+    if (!filePath || !existsSync(filePath)) {
+      return new Response("Not found", { status: 404 });
+    }
+    const ext = filePath.split(".").pop()?.toLowerCase() || "";
+    const mime = AVATAR_MIME[ext];
+    if (!mime) return new Response("Not found", { status: 404 });
+    return new Response(Bun.file(filePath), {
+      headers: {
+        "Content-Type": mime,
+        "Cache-Control": "public, max-age=3600",
+        ...CORS,
+      },
+    });
+  }
+
   // ── Serve static sprites ──
   if (method === "GET" && path.startsWith("/sprites/")) {
     const safeName = path.slice(9).replace(/[^a-z0-9_.\-]/gi, "");
@@ -858,7 +976,11 @@ if (existsSync(TEAMS_DIR)) {
 // ─── Bun server ──────────────────────────────────────────────────────────────
 const server = Bun.serve({
   port: PORT,
+  hostname: HOST,
   fetch(req, server) {
+    if (!isTrustedRequest(req)) {
+      return new Response("Forbidden", { status: 403 });
+    }
     // Upgrade WebSocket connections
     if (req.headers.get("upgrade") === "websocket") {
       const ok = server.upgrade(req);
@@ -920,6 +1042,8 @@ const server = Bun.serve({
     ["GET ", "/state          ", "all agents"],
     ["POST", "/state          ", "update state"],
     ["POST", "/message        ", "msg to agent"],
+    ["GET ", "/messages       ", "agent feed"],
+    ["GET ", "/avatars        ", "avatar map"],
     ["GET ", "/inbox/:id      ", "agent polls"],
     ["POST", "/reply          ", "agent reply"],
     ["GET ", "/logs           ", "bridge logs"],
