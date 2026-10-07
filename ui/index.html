@@ -3284,7 +3284,37 @@
       if (role !== 'owner' && role !== 'lead') {
         return {set: (ROLE_SPRITE[role] || 'DEV').toLowerCase()};
       }
-      return {set: AVATAR_SETS[hashName(name) % AVATAR_SETS.length]};
+      return {set: autoPickSet(name)};
+    }
+
+    // Collision-avoiding auto-pick: a plain per-name hash collides easily
+    // across only 8 built-in sets (e.g. two unrelated names both landing on
+    // 'architect'). Among agents with no avatars.json entry, assign each a
+    // distinct set — hash-ordered, then nudged to the next free slot — so
+    // two different agents don't end up looking identical.
+    function autoPickSet(name) {
+      const unassigned = [...new Set(
+        agents
+          .filter(a => a.role === 'owner' || a.role === 'lead')
+          .map(a => a.name || a.id)
+          .filter(n => {
+            const e = avatarMap[n];
+            // Only an entry that actually supplies a big-character look —
+            // a built-in set, or an image opted in with character:true —
+            // sits outside the auto-pick pool. An icon-only image (a logo)
+            // still needs an auto-picked character, same as no entry at all.
+            return !(e && (e.set || (e.image && e.character)));
+          })
+      )].sort((a, b) => hashName(a) - hashName(b) || (a < b ? -1 : 1));
+      const used = new Set();
+      let mine = -1;
+      for (const n of unassigned) {
+        let idx = hashName(n) % AVATAR_SETS.length;
+        while (used.has(idx)) idx = (idx + 1) % AVATAR_SETS.length;
+        used.add(idx);
+        if (n === name) mine = idx;
+      }
+      return AVATAR_SETS[mine >= 0 ? mine : hashName(name) % AVATAR_SETS.length];
     }
 
     function spriteUrl(av, state) {
