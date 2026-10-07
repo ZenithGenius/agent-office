@@ -3268,10 +3268,14 @@
       return bridgeUrl.replace('ws://', 'http://').replace('wss://', 'https://');
     }
 
-    function avatarFor(ag) {
+    // Custom images (avatars.json) are an identity ICON for the small circle only.
+    // The big character sprite always uses a built-in set: a logo/photo has no
+    // idle/thinking/talking poses, and standing a flat logo at persona size reads
+    // wrong next to the game-style characters.
+    function avatarFor(ag, forCharacter) {
       const name = ag.name || ag.id || '';
       const entry = avatarMap[name];
-      if (entry && entry.image) {
+      if (!forCharacter && entry && entry.image) {
         const img = entry.image;
         return {image: img.startsWith('http') ? img : bridgeHttp() + img};
       }
@@ -3548,7 +3552,7 @@
     function setSprite(id, state) {
       const ag = agents.find(a => a.id === id);
       if (!ag || activeId !== id) return;
-      const av = avatarFor(ag);
+      const av = avatarFor(ag, true);
       const src = spriteUrl(av, state);
       const key = av.image ? ('IMG:' + av.image) : (String(av.set || 'dev').toUpperCase() + '_' + state.toUpperCase());
       const img = document.getElementById('char-img');
@@ -3563,7 +3567,7 @@
       if (!tlLeadId) return;
       const ag = agents.find(a => a.id === tlLeadId);
       if (!ag) return;
-      const av = avatarFor(ag);
+      const av = avatarFor(ag, true);
       const src = spriteUrl(av, state);
       const key = av.image ? ('IMG:' + av.image) : (String(av.set || 'male').toUpperCase() + '_' + state.toUpperCase());
       const img = document.getElementById('tl-img');
