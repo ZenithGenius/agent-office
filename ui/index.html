@@ -3275,7 +3275,7 @@
     function avatarFor(ag, forCharacter) {
       const name = ag.name || ag.id || '';
       const entry = avatarMap[name];
-      if (!forCharacter && entry && entry.image) {
+      if (entry && entry.image && (!forCharacter || entry.character)) {
         const img = entry.image;
         return {image: img.startsWith('http') ? img : bridgeHttp() + img};
       }

@@ -523,11 +523,17 @@ function expandHome(p: string): string {
 }
 
 /** Read ~/.agent-office/avatars.json → API map + ordered absolute image paths. */
+// A plain string value is an icon for the small circle only (the default: a
+// logo doesn't belong on the big character). { image, character: true } opts
+// a real portrait (e.g. a person, not a logo) into the big character too.
 function loadAvatars(): {
-  api: Record<string, { set: string } | { image: string }>;
+  api: Record<string, { set: string } | { image: string; character?: true }>;
   paths: string[];
 } {
-  const api: Record<string, { set: string } | { image: string }> = {};
+  const api: Record<
+    string,
+    { set: string } | { image: string; character?: true }
+  > = {};
   const paths: string[] = [];
   try {
     if (!existsSync(AVATARS_FILE)) return { api, paths };
@@ -535,14 +541,27 @@ function loadAvatars(): {
     if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
       return { api, paths };
     }
-    for (const [name, value] of Object.entries(raw)) {
-      if (typeof value !== "string" || !value) continue;
+    for (const [name, rawValue] of Object.entries(raw)) {
+      const asCharacter =
+        typeof rawValue === "object" &&
+        rawValue !== null &&
+        (rawValue as { character?: unknown }).character === true;
+      const value =
+        typeof rawValue === "string"
+          ? rawValue
+          : typeof (rawValue as { image?: unknown })?.image === "string"
+            ? (rawValue as { image: string }).image
+            : undefined;
+      if (!value) continue;
       if (BUILTIN_AVATAR_SETS.has(value)) {
         api[name] = { set: value };
       } else {
         const idx = paths.length;
         paths.push(expandHome(value));
-        api[name] = { image: `/avatar/${idx}` };
+        api[name] = {
+          image: `/avatar/${idx}`,
+          ...(asCharacter ? { character: true } : {}),
+        };
       }
     }
   } catch {}
